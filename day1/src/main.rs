@@ -10,7 +10,7 @@ fn main() {
     part_two(&data);
 }
 
-fn part_one(data: &String) {
+fn part_one(data: &str) {
     let mut total = 0;
     let mut max_total = 0;
 
@@ -19,28 +19,28 @@ fn part_one(data: &String) {
             max_total = total;
         }
 
-        if line != "" {
-            total += line.parse::<i32>().unwrap();
-        } else {
+        if line.is_empty() {
             total = 0;
+        } else {
+            total += line.parse::<i32>().unwrap();
         }
     }
 
     println!("Part one: {}", max_total);
 }
 
-fn part_two(data: &String) {
+fn part_two(data: &str) {
     let mut total = 0;
     let mut max_totals = vec![];
 
     for line in data.lines() {
-        if line != "" {
-            total += line.parse::<i32>().unwrap();
-        } else {
+        if line.is_empty() {
             max_totals.push(total);
             max_totals.sort_by(|a, b| a.cmp(b).reverse());
             max_totals.truncate(3);
             total = 0;
+        } else {
+            total += line.parse::<i32>().unwrap();
         }
     }
 
