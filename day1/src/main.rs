@@ -1,10 +1,9 @@
 use std::fs;
 
-const FILE_NAME: &str  = "data1.txt";
+const FILE_NAME: &str = "data1.txt";
 
 fn main() {
-    let mut data = fs::read_to_string(FILE_NAME)
-        .expect("Something went wrong reading the file");
+    let mut data = fs::read_to_string(FILE_NAME).expect("Something went wrong reading the file");
     data.pop();
 
     part_one(&data);
@@ -35,7 +34,6 @@ fn part_two(data: &String) {
     let mut max_totals = vec![];
 
     for line in data.lines() {
-
         if line != "" {
             total += line.parse::<i32>().unwrap();
         } else {
