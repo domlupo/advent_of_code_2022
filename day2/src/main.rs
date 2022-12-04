@@ -1,7 +1,6 @@
 use std::fs;
 
 const FILE_NAME: &str = "data1.txt";
-const OPPONENT_SHAPE_INDEX: usize = 0;
 const SHAPE_INDEX: usize = 2;
 
 fn main() {
@@ -12,11 +11,11 @@ fn main() {
     part_two(&data);
 }
 
-fn part_one(data: &String) {
+fn part_one(data: &str) {
     let mut total_score = 0;
 
     for line in data.lines() {
-        let opponent_shape = line.chars().nth(OPPONENT_SHAPE_INDEX).unwrap();
+        let opponent_shape = line.chars().next().unwrap();
         let shape = line.chars().nth(SHAPE_INDEX).unwrap();
 
         let opponent_shape = Shape::from_char_to_shape(opponent_shape);
@@ -30,11 +29,11 @@ fn part_one(data: &String) {
     println!("Part one: {}", total_score);
 }
 
-fn part_two(data: &String) {
+fn part_two(data: &str) {
     let mut total_score = 0;
 
     for line in data.lines() {
-        let opponent_shape = line.chars().nth(OPPONENT_SHAPE_INDEX).unwrap();
+        let opponent_shape = line.chars().next().unwrap();
         let shape = line.chars().nth(SHAPE_INDEX).unwrap();
 
         let opponent_shape = Shape::from_char_to_shape(opponent_shape);
