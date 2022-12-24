@@ -1,8 +1,4 @@
-use std::{
-    cell::{Cell, RefCell},
-    fs,
-    str::Lines,
-};
+use std::{fs, str::Lines};
 
 const FILE_NAME: &str = "data1.txt";
 const PART_ONE_ROUNDS: u128 = 20;
@@ -25,42 +21,47 @@ fn main() {
 
 fn solve(monkeys: &mut Vec<Monkey>, rounds: u128, worry_modifier: WorryModifier) -> usize {
     for _ in 0..rounds {
-        for monkey in monkeys.iter() {
-            for item in monkey.items.borrow().iter() {
-                let operation_value = match monkey.operation_value {
-                    OperationValue::Old => *item,
-                    OperationValue::Number(number) => number as u128,
-                };
+        for i in 0..monkeys.len() {
+            for j in 0..monkeys[i].items.len() {
+                let mut worry_level;
+                let divisor;
+                let true_monkey_id;
+                let false_monkey_id;
 
-                let worry_level = match monkey.operation {
-                    Operation::Add => item + operation_value,
-                    Operation::Multiply => item * operation_value,
-                };
+                {
+                    let monkey = &monkeys[i];
+                    true_monkey_id = monkey.test.true_monkey_id.0;
+                    false_monkey_id = monkey.test.false_monkey_id.0;
+                    let item = monkey.items[j];
 
-                let worry_level = modify_worry_level(worry_level, &worry_modifier);
+                    let operation_value = match monkey.operation_value {
+                        OperationValue::Old => item,
+                        OperationValue::Number(number) => number as u128,
+                    };
 
-                match (worry_level % monkey.test.divisor) == 0 {
-                    true => monkeys[monkey.test.true_monkey_id.0 as usize]
-                        .items
-                        .borrow_mut()
-                        .push(worry_level),
-                    false => monkeys[monkey.test.false_monkey_id.0 as usize]
-                        .items
-                        .borrow_mut()
-                        .push(worry_level),
+                    worry_level = match monkey.operation {
+                        Operation::Add => item + operation_value,
+                        Operation::Multiply => item * operation_value,
+                    };
+
+                    worry_level = modify_worry_level(worry_level, &worry_modifier);
+                    divisor = monkey.test.divisor;
                 }
 
-                monkey
-                    .inspection_count
-                    .set(monkey.inspection_count.get() + 1);
+                match (worry_level % divisor) == 0 {
+                    true => monkeys[true_monkey_id as usize].items.push(worry_level),
+                    false => monkeys[false_monkey_id as usize].items.push(worry_level),
+                }
+
+                monkeys[i].inspection_count += 1;
             }
-            monkey.items.borrow_mut().clear();
+            monkeys[i].items.clear();
         }
     }
 
     let mut inspection_counts = vec![];
     for monkey in monkeys {
-        inspection_counts.push(monkey.inspection_count.get())
+        inspection_counts.push(monkey.inspection_count)
     }
     inspection_counts.sort();
     inspection_counts.reverse();
@@ -99,7 +100,6 @@ fn parse_monkey(lines: &mut Lines) -> Option<Monkey> {
     let line = &line[18..]; // TODO make number a constant
     let tokens: Vec<&str> = line.split(", ").collect();
     let items: Vec<u128> = tokens.iter().map(|t| t.parse::<u128>().unwrap()).collect();
-    let items = RefCell::new(items);
 
     // parse operation and operation value
     let line = lines.next()?;
@@ -135,16 +135,16 @@ fn parse_monkey(lines: &mut Lines) -> Option<Monkey> {
 }
 
 struct Monkey {
-    items: RefCell<Vec<u128>>,
+    items: Vec<u128>,
     operation: Operation,
     operation_value: OperationValue,
     test: Test,
-    inspection_count: Cell<usize>,
+    inspection_count: usize,
 }
 
 impl Monkey {
     fn new(
-        items: RefCell<Vec<u128>>,
+        items: Vec<u128>,
         operation: Operation,
         operation_value: OperationValue,
         test: Test,
@@ -154,7 +154,7 @@ impl Monkey {
             operation,
             operation_value,
             test,
-            inspection_count: Cell::new(0),
+            inspection_count: 0,
         }
     }
 }
