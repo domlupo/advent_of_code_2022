@@ -1,46 +1,138 @@
 use std::{
     cmp::{max, min},
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     fs,
 };
 
 const FILE_NAME: &str = "data1.txt";
+const ANSWER_LINE: i32 = 10;
 
 fn main() {
     let mut data = fs::read_to_string(FILE_NAME).expect("Something went wrong reading the file");
     data.pop();
 
-    let (mut item_grid, nearest_beacon) = parse(&data);
+    let (mut item_grid, sensor_nearest_beacon) = parse(&data);
 
-    part_one(&mut item_grid, &nearest_beacon);
+    part_one(&mut item_grid, &sensor_nearest_beacon);
 }
 
-fn part_one(item_grid: &mut HashMap<Point, Item>, nearest_beacon: &HashMap<Point, Point>) {
-    for (s, b) in nearest_beacon {
-        let no_beacon_positions = get_no_beacon_positions(s, b);
+fn part_one(
+    item_grid: &mut HashMap<Point, Vec<Item>>,
+    sensor_nearest_beacon: &HashMap<Point, Point>,
+) {
+    // fill the item grid with the no beacon border. Only the border is filled instead of the entire
+    // grid due to computation cost. The grid can be found if needed due to relating the border with
+    // the sensor that produced it.
+    for (sensor, nearest_beacon) in sensor_nearest_beacon {
+        let no_beacon_positions = get_no_beacon_positions(sensor, nearest_beacon);
 
-        for point in no_beacon_positions {
+        for (point, sensor) in no_beacon_positions {
             match item_grid.get(&point) {
-                Some(_) => (),
+                Some(items) => {
+                    // TODO Does a new vector need allocated?
+                    let mut items = items.iter().cloned().collect::<Vec<Item>>();
+                    items.push(Item::NoHiddenBeacon(sensor));
+                    item_grid.insert(point, items.to_vec());
+                }
                 None => {
-                    item_grid.insert(point, Item::NoBeacon);
+                    item_grid.insert(point, vec![Item::NoHiddenBeacon(sensor)]);
                 }
             }
         }
     }
 
+    // filter item_grid to the relevant item_line to reduce computation cost
+    let mut item_line = HashMap::new();
+    for (point, item) in item_grid.iter() {
+        if point.1 == ANSWER_LINE {
+            item_line.insert(point.clone(), item.clone());
+        }
+    }
+
+    // if the item line has 2 beacons from the same sensor, then no additional
+    // beacons exist between these 2 beacons. If the item line has only 1 beacon
+    // from a sensor, then only that position does not have a beacon.
+    let mut sensor_beacon_count: HashMap<Point, usize> = HashMap::new();
+    for (_point, items) in &item_line {
+        for item in items.iter() {
+            match item {
+                Item::NoHiddenBeacon(sensor) => match sensor_beacon_count.get(sensor) {
+                    Some(sensor_count) => {
+                        sensor_beacon_count.insert(sensor.clone(), sensor_count + 1);
+                    }
+                    None => {
+                        sensor_beacon_count.insert(sensor.clone(), 1);
+                    }
+                },
+                _ => (),
+            }
+        }
+    }
+
     let mut no_beacon_count = 0;
-    for point in item_grid.keys() {
-        // TODO make CONSTANT
-        if point.1 == 10 && *item_grid.get(point).unwrap() == Item::NoBeacon {
+    let mut beacon_count = 0;
+    let mut related_sensor: Option<Point> = None;
+
+    let min_x = item_line.keys().map(|point| point.0).min().unwrap();
+    let max_x = item_line.keys().map(|point| point.0).max().unwrap();
+    let x = (min_x..=max_x).collect::<Vec<i32>>();
+    let mut x_iter = x.iter().peekable();
+
+    while x_iter.peek().is_some() {
+        let mut increment_no_beacon_count= false;
+
+        if related_sensor.is_some() {
+            increment_no_beacon_count = true;
+        }
+
+        let point = Point(*x_iter.next().unwrap(), ANSWER_LINE);
+        match item_line.get(&point) {
+            Some(items) => {
+                for item in items.iter() {
+                    match item {
+                        Item::Beacon => {
+                            // Any point with a beacon will have both one Item::Beacon and at least one 
+                            // Item::NoHiddenBeacon so remove this point from the final no beacon count
+                            beacon_count += 1;
+                        }
+                        Item::Sensor => (),
+                        Item::NoHiddenBeacon(sensor) => {
+                            increment_no_beacon_count = true;
+                            let sensor_beacon_count = *sensor_beacon_count.get(sensor).unwrap();
+
+                            // TODO start tracking a new
+                            // BUG right now this goes off sensor x but should go off which grid 
+                            // will last longer
+                            if related_sensor.is_some()
+                                && related_sensor.as_ref().unwrap().0 < sensor.0
+                                && sensor_beacon_count == 2
+                            {
+                                related_sensor = Some(sensor.clone());
+                            }
+
+                            // TODO stop tracking a no beacon grid
+                            // BUG
+
+                            // Start tracking a no beacon grid
+                            if related_sensor.is_none() && sensor_beacon_count == 2 {
+                                related_sensor = Some(sensor.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            None => (),
+        }
+
+        if increment_no_beacon_count {
             no_beacon_count += 1;
         }
     }
 
-    println!("Part one: {}", no_beacon_count);
+    println!("part one: {}", no_beacon_count - beacon_count);
 }
 
-fn parse(data: &str) -> (HashMap<Point, Item>, HashMap<Point, Point>) {
+fn parse(data: &str) -> (HashMap<Point, Vec<Item>>, HashMap<Point, Point>) {
     let lines = data.lines();
     let mut item_grid = HashMap::new();
     let mut nearest_beacon = HashMap::new();
@@ -62,19 +154,19 @@ fn parse(data: &str) -> (HashMap<Point, Item>, HashMap<Point, Point>) {
             tokens.next().unwrap().parse::<i32>().unwrap(),
         );
 
-        item_grid.insert(sensor_position.clone(), Item::Sensor);
-        item_grid.insert(beacon_position.clone(), Item::Beacon);
+        item_grid.insert(sensor_position.clone(), vec![Item::Sensor]);
+        item_grid.insert(beacon_position.clone(), vec![Item::Beacon]);
         nearest_beacon.insert(sensor_position, beacon_position);
     }
 
     (item_grid, nearest_beacon)
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 enum Item {
     Beacon,
     Sensor,
-    NoBeacon,
+    NoHiddenBeacon(Point),
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -104,9 +196,9 @@ impl Point {
 }
 
 /// TODO
-fn get_no_beacon_positions(sensor: &Point, nearest_beacon: &Point) -> HashSet<Point> {
+fn get_no_beacon_positions(sensor: &Point, nearest_beacon: &Point) -> HashMap<Point, Point> {
     let taxicab_distance = Point::taxicab_distance(sensor, nearest_beacon);
-    let mut no_beacon_positions = HashSet::new();
+    let mut no_beacon_positions = HashMap::new();
     let mut point = sensor.clone();
 
     let mut right_count = 0;
@@ -120,6 +212,7 @@ fn get_no_beacon_positions(sensor: &Point, nearest_beacon: &Point) -> HashSet<Po
         taxicab_distance,
         &Direction::L,
         &Direction::U,
+        sensor,
         &mut no_beacon_positions,
     );
     point = travel_grid(
@@ -127,6 +220,7 @@ fn get_no_beacon_positions(sensor: &Point, nearest_beacon: &Point) -> HashSet<Po
         taxicab_distance,
         &Direction::D,
         &Direction::L,
+        sensor,
         &mut no_beacon_positions,
     );
     point = travel_grid(
@@ -134,6 +228,7 @@ fn get_no_beacon_positions(sensor: &Point, nearest_beacon: &Point) -> HashSet<Po
         taxicab_distance,
         &Direction::R,
         &Direction::D,
+        sensor,
         &mut no_beacon_positions,
     );
     travel_grid(
@@ -141,6 +236,7 @@ fn get_no_beacon_positions(sensor: &Point, nearest_beacon: &Point) -> HashSet<Po
         taxicab_distance,
         &Direction::U,
         &Direction::R,
+        sensor,
         &mut no_beacon_positions,
     );
 
@@ -153,21 +249,19 @@ fn travel_grid(
     taxicab_distance: i32,
     direction_undo: &Direction,
     new_direction: &Direction,
-    no_beacon_positions: &mut HashSet<Point>,
+    sensor: &Point,
+    no_beacon_positions: &mut HashMap<Point, Point>,
 ) -> Point {
     let mut point = point.clone();
-    let mut prior_travel_count = taxicab_distance;
+    let mut new_count = 0;
     loop {
-        prior_travel_count -= 1;
-        point = Point::travel(direction_undo, &point);
+        new_count += 1;
 
-        let mut new_count = 0;
-        let mut new_point = point.clone();
-        for _ in 0..taxicab_distance - prior_travel_count {
-            new_count += 1;
-            new_point = Point::travel(new_direction, &new_point);
-            no_beacon_positions.insert(new_point.clone());
-        }
+        point = Point::travel(direction_undo, &point);
+        point = Point::travel(new_direction, &point);
+        let new_point = point.clone();
+
+        no_beacon_positions.insert(new_point.clone(), sensor.clone());
 
         if new_count == taxicab_distance {
             return new_point;
